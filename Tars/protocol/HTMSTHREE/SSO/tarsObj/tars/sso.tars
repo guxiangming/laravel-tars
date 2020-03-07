@@ -1,0 +1,20 @@
+module service
+{
+    //输入参数通用结构体
+    struct CommonInParam {
+        0 optional string method;  //路由方式
+        1 optional string route;  //路由地址
+        2 optional string params; //参数
+    };
+
+    //输出参数通用结构体
+    struct CommonOutParam {
+        0 require string response;  //接口返回json
+    };
+
+    interface SsoService
+    {
+        void Controller(CommonInParam inParam, out CommonOutParam outParam);
+    };
+
+}
