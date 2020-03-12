@@ -3,7 +3,7 @@ return [
     //http服务网关
     'registries' => [],
 
-    'tarsregistry' => 'tars.tarsregistry.QueryObj@tcp -h 10.29.217.191 -p 17890',
+    'tarsregistry' => 'tars.tarsregistry.QueryObj@tcp -h  -p 17890',
 
     'log_level' => '',
 

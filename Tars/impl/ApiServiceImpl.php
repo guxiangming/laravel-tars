@@ -13,11 +13,17 @@ use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 use Illuminate\Http\Request;
 use Illuminate\Contracts\Http\Kernel;
 use Tars\App as Tapp;
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Facade;
+use Illuminate\Container\Container;
 
+use App\Http\ModuleClass\LockOrderClass;
 class ApiServiceImpl implements ApiServiceServant
 {
+    protected $providerReset=['App\Providers\AuthServiceProvider','Illuminate\Database\DatabaseServiceProvider'];
+    protected $appReset=['auth','auth.driver','db','db.factory','db.connection'];
 
-    protected $timer=[];
+    // protected $timer=['App\Tars\task\LockOrder'];
     protected static $lock = true;
     /**
      * @return response
@@ -96,10 +102,25 @@ class ApiServiceImpl implements ApiServiceServant
                 //切换log上报方案
                 config(['logging.default' => 'stderr', 'logging.channels.stderr.handler' => 'App\Tars\TarsLogHandler']);
                 config(['tarsregistry' => $tarsregistry]);
-                $tasks=Tapp::getSwooleInstance();
-                    foreach($this->timer as $v){
-                        $tasks->task(new $v());
-                }
+                // $tasks=Tapp::getSwooleInstance();
+                //     foreach($this->timer as $v){
+                //         $tasks->task(new $v());
+                // }
+                //定时任务区
+                \swoole_timer_tick(1000*60*60, function () {//小时
+                   LockOrderClass::SystemLockOrder();
+               });
+               \swoole_timer_tick(1000*60*5, function () {//5分钟
+                   LockOrderClass::SystemAuditCost();
+               });
+               \swoole_timer_tick(1000*60*60, function () {//小时
+                   LockOrderClass::SystemLockInsurance();
+               });
+               \swoole_timer_tick(1000*60*60*24, function () {//天
+                    LockOrderClass::SystemCheckCarrierStatus();
+                });
+
+               
                 ApiServiceImpl::$lock = false;
             }
 
@@ -154,7 +175,7 @@ class ApiServiceImpl implements ApiServiceServant
 
             $outParam->response = $responseData;
             $kernel->terminate($request, $response);
-
+            $this->clean();
             return true;
             // $this->createIlluminateRequest($get, $post, $cookie, $files, $server, $content);
             // $selfRequest = \Request::instance();
@@ -179,14 +200,114 @@ class ApiServiceImpl implements ApiServiceServant
             $outParam->response = json_encode(['code' => 600, 'data' => "路由未开启，检查center配置"]);
         } catch (\Throwable $t) {
           
-            $response = json_encode(['code' => 600, 'data' => "tars-rpc produce throwable!", 't' => $t->getFile(), 'line' => $t->getLine()]);
+            $response = json_encode(['code' => 600, 'data' => "tars-rpc produce throwable!".$t->getMessage(),'t' => $t->getFile(), 'line' => $t->getLine()]);
             $outParam->response = $response;
         }
         return false;
     }
 
 
+    public  function clean()
+    {
+        $application=app();
+        $this->container =Container::getInstance();
+        $this->resetSession($application);
+        $this->resetCookie($application);
+        $this->resetApp();
+        $this->resetProviders($application);
+        // $this->clearInstances($application);
+        // $this->bindRequest($application);
+        // $this->rebindRouterContainer($application);
+        // $this->rebindViewContainer($application);
+        // ['db','db.driver']
+        
+    }
 
+
+    protected function resetSession($application)
+    {
+        if (isset($application['session'])) {
+            $session = $application->make('session');
+            $session->flush();
+        }
+    }
+
+    protected function resetProviders($application)
+    {
+        $providers=$this->providerReset;
+        foreach ($providers as $provider) {
+            if (class_exists($provider)) {
+                $provider = new $provider($application);
+                $this->providers[get_class($provider)] = $provider;
+            }
+        }
+        //get provider application
+        foreach ($this->providers as $provider) {
+            $this->rebindProviderContainer($provider, $application);
+            if (method_exists($provider, 'register')) {
+                $provider->register();
+            }
+            if (method_exists($provider, 'boot')) {
+                $application->call([$provider, 'boot']);
+            }
+        }
+    }
+     /**
+     * Rebind service provider's container.
+     */
+    protected function rebindProviderContainer($provider, $application)
+    {
+        $closure = function () use ($application) {
+            $this->app = $application;
+        };
+        $resetProvider = $closure->bindTo($provider, $provider);
+        $resetProvider();
+    }
+
+    protected function resetCookie($application)
+    {
+        if (isset($application['cookie'])) {
+            $cookies = $application->make('cookie');
+            foreach ($cookies->getQueuedCookies() as $key => $value) {
+                $cookies->unqueue($key);
+            }
+        }
+    }
+   
+   
+    protected function resetApp()
+    {
+        $resets = $this->appReset;
+        //reset auth provider   
+        foreach ($resets as $abstract) {
+            if ($abstract instanceof ServiceProvider) {
+                $this->container->register($abstract, [], true);
+
+            } elseif ($this->container->has($abstract)) {
+                $this->rebindAbstract($abstract);
+                Facade::clearResolvedInstance($abstract);
+            }
+        }
+    }
+
+    /**
+     * Rebind abstract.
+     *
+     * @param string $abstract
+     * @return void
+     */
+    protected function rebindAbstract($abstract)
+    {
+        $abstract = $this->container->getAlias($abstract);
+        
+        $binding = array_get($this->container->getBindings(), $abstract);
+
+        unset($this->container[$abstract]);
+
+        if ($binding) {
+            $this->container->bind($abstract, $binding['concrete'], $binding['shared']);
+        }
+    }
 
     /**
      * Transforms $_SERVER array.
@@ -217,4 +338,7 @@ class ApiServiceImpl implements ApiServiceServant
 
         return $__SERVER;
     }
+
+
+    
 }

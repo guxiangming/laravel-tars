@@ -35,21 +35,20 @@ class TarsLogHandler extends AbstractProcessingHandler
             'UpdatedAt' => date('Y-m-d H:i:s'),
         ];
         //信息上报center
-        $this->curl(['method'=>'POST','params'=>['data'=>$data,'encrypt'=>md5('XMRuIAOOKRq8k6')],'route'=>'/api/log/report']);
+        $this->curl(['method'=>'POST','params'=>['data'=>$data,'encrypt'=>md5('XXX')],'route'=>'/api/log/report']);
     }
 
     protected function getUserInfo(){
         $request=\Request::all();
         if(isset($request['sso_token'])){
-            $sso_token_arr = \Crypt::decrypt($request['sso_token']);
-            return json_encode($sso_token_arr,JSON_FORCE_OBJECT);
+            return json_encode($request['sso_token'],JSON_FORCE_OBJECT);
         }else{
             return '';
         }
     }
 
     protected function curl($curlRequest, $timeout = 10){
-        $url=env('MESSAGE_URL','http://mms.myhtms.cn').$curlRequest['route'];
+        $url=env('MESSAGE_URL','').$curlRequest['route'];
         $params=$curlRequest['params'];
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);    // 要求结果为字符串且输出到屏幕上

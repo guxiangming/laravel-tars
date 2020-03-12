@@ -24,7 +24,8 @@ class TarsController extends Controller
      */
     protected $container;
     protected $httpKernel;
-    protected $providerReset=['App\Providers\AuthServiceProvider'];
+    protected $appReset=['auth','auth.driver','db','db.factory','db.connection'];
+    protected $providerReset=['App\Providers\AuthServiceProvider','Illuminate\Database\DatabaseServiceProvider'];
     protected $timer=[];
     protected static $lock=true;
     public function actionRoute()
@@ -138,20 +139,13 @@ class TarsController extends Controller
         $application=app();
         $this->resetSession($application);
         $this->resetCookie($application);
-        $this->resetAuth();
+        $this->resetApp();
         $this->resetProviders($application);
         // $this->clearInstances($application);
         // $this->bindRequest($application);
         // $this->rebindRouterContainer($application);
         // $this->rebindViewContainer($application);
-        // ['db','db.driver']
-        \DB::reconnect();
-        \DB::connection('hlyun_oms')->reconnect();
-        // \DB::connection('hlyun_sso')->reconnect();
-        // \DB::connection('hlyun_base')->reconnect();
-        // \DB::connection('hlyun_fms')->reconnect();
-        // \DB::connection('hlyun_crm')->reconnect();
-        // \DB::connection('hlyun_trailer')->reconnect();
+
     }
 
 
@@ -205,9 +199,9 @@ class TarsController extends Controller
         }
     }
    
-    protected function resetAuth()
+    protected function resetApp()
     {
-        $resets = ['auth','auth.driver'];
+        $resets = $this->appReset;
         //reset auth provider   
         foreach ($resets as $abstract) {
             if ($abstract instanceof ServiceProvider) {
